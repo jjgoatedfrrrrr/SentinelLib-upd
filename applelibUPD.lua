@@ -1,4 +1,10 @@
 -- vars
+-- ============================================================
+-- CONFIG
+-- ============================================================
+local BLUR_SIZE    = 20    -- game-world blur strength (0 = no blur)
+local LEFT_OPACITY = 0.30  -- left panel: 0 = solid white, 1 = fully see-through
+-- ============================================================
 
 local lib = {}
 local sections = {}
@@ -13,14 +19,11 @@ end
 
 function lib:init(ti, dosplash, visiblekey, deleteprevious)
     if syn then
-        
-         cg = game:GetService("CoreGui")
+        cg = game:GetService("CoreGui")
         if cg:FindFirstChild("ScreenGui") and deleteprevious then
-           tp(cg.ScreenGui.main, cg.ScreenGui.main.Position + UDim2.new(0,0,2,0), 0.5)
+            tp(cg.ScreenGui.main, cg.ScreenGui.main.Position + UDim2.new(0,0,2,0), 0.5)
             game:GetService("Debris"):AddItem(cg.ScreenGui, 1)
-      end
-
-         -- main
+        end
         scrgui = Instance.new("ScreenGui")
         syn.protect_gui(scrgui)
         scrgui.Parent = game:GetService("CoreGui")
@@ -29,9 +32,7 @@ function lib:init(ti, dosplash, visiblekey, deleteprevious)
             gethui().ScreenGui.main:TweenPosition(gethui().ScreenGui.main.Position + UDim2.new(0,0,2,0), "InOut", "Quart", 0.5)
             game:GetService("Debris"):AddItem(gethui().ScreenGui, 1)
         end
-
-        -- main
-         scrgui = Instance.new("ScreenGui")
+        scrgui = Instance.new("ScreenGui")
         scrgui.Parent = gethui()
     else
         cg = game:GetService("CoreGui")
@@ -39,18 +40,18 @@ function lib:init(ti, dosplash, visiblekey, deleteprevious)
             tp(cg.ScreenGui.main, cg.ScreenGui.main.Position + UDim2.new(0,0,2,0), 0.5)
             game:GetService("Debris"):AddItem(cg.ScreenGui, 1)
         end
-         scrgui = Instance.new("ScreenGui")
+        scrgui = Instance.new("ScreenGui")
         scrgui.Parent = cg
     end
-        
+
     -- ============================================================
-    -- ADDED: BlurEffect for the frosted-glass look
+    -- ADDED: Game-world blur (only *visible* through the left panel)
     -- ============================================================
     local lighting = game:GetService("Lighting")
-    if not lighting:FindFirstChild("UIBlurEffect") then
+    if BLUR_SIZE > 0 and not lighting:FindFirstChild("UIBlurEffect") then
         local blur = Instance.new("BlurEffect")
-        blur.Name = "UIBlurEffect"
-        blur.Size = 20
+        blur.Name  = "UIBlurEffect"
+        blur.Size  = BLUR_SIZE
         blur.Parent = lighting
     end
     -- ============================================================
@@ -106,39 +107,64 @@ function lib:init(ti, dosplash, visiblekey, deleteprevious)
         splash:TweenPosition(UDim2.new(0.5, 0, 2, 0), "InOut", "Quart", 1)
         game:GetService("Debris"):AddItem(splash, 1)
     end
-        
 
+    -- ============================================================
+    -- CHANGED: main is now an invisible container (blur shows through)
+    -- ============================================================
     local main = Instance.new("Frame")
     main.Name = "main"
     main.Parent = scrgui
     main.AnchorPoint = Vector2.new(0.5, 0.5)
     main.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    -- CHANGED: 0.150 -> 0.5 so the blur shows through the left side
-    main.BackgroundTransparency = 0.5
+    main.BackgroundTransparency = 1          -- was 0.15; invisible so blur can show through
     main.Position = UDim2.new(0.5, 0, 2, 0)
     main.Size = UDim2.new(0, 721, 0, 584)
+    main.ClipsDescendants = true             -- rounds child corners to match the window
 
     local uc = Instance.new("UICorner")
     uc.CornerRadius = UDim.new(0, 18)
     uc.Parent = main
 
-    local UserInputService = game:GetService("UserInputService") --- skidded ik
+    -- ============================================================
+    -- ADDED: Frosted-glass panel behind the tabs (left side)
+    -- ============================================================
+    local leftPanel = Instance.new("Frame")
+    leftPanel.Name = "leftPanel"
+    leftPanel.Parent = main
+    leftPanel.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    leftPanel.BackgroundTransparency = LEFT_OPACITY
+    leftPanel.BorderSizePixel = 0
+    leftPanel.Position = UDim2.new(0, 0, 0, 0)
+    leftPanel.Size = UDim2.new(0, 280, 0, 584) -- overlaps workarea so the seam is hidden
+    leftPanel.ZIndex = 1
+
+    local leftPanelCorner = Instance.new("UICorner")
+    leftPanelCorner.CornerRadius = UDim.new(0, 18)
+    leftPanelCorner.Parent = leftPanel
+
+    local leftPanelStroke = Instance.new("UIStroke")
+    leftPanelStroke.Color = Color3.fromRGB(255, 255, 255)
+    leftPanelStroke.Transparency = 0.55
+    leftPanelStroke.Thickness = 1
+    leftPanelStroke.Parent = leftPanel
+    -- ============================================================
+
+    local UserInputService = game:GetService("UserInputService")
     local dragging
     local dragInput
     local dragStart
     local startPos
-    
+
     local function update(input)
         local delta = input.Position - dragStart
         main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
     end
-    
+
     main.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = true
             dragStart = input.Position
             startPos = main.Position
-            
             input.Changed:Connect(function()
                 if input.UserInputState == Enum.UserInputState.End then
                     dragging = false
@@ -146,27 +172,30 @@ function lib:init(ti, dosplash, visiblekey, deleteprevious)
             end)
         end
     end)
-    
+
     main.InputChanged:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
             dragInput = input
         end
     end)
-    
+
     UserInputService.InputChanged:Connect(function(input)
         if input == dragInput and dragging then
             update(input)
         end
     end)
 
-    -- workarea right side setup
-
+    -- ============================================================
+    -- workarea (right side) — stays opaque white so no blur shows
+    -- ============================================================
     local workarea = Instance.new("Frame")
     workarea.Name = "workarea"
     workarea.Parent = main
     workarea.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    workarea.BackgroundTransparency = 0       -- explicit: fully opaque
     workarea.Position = UDim2.new(0.36403501, 0, 0, 0)
     workarea.Size = UDim2.new(0, 458, 0, 584)
+    workarea.ZIndex = 1
 
     local uc_2 = Instance.new("UICorner")
     uc_2.CornerRadius = UDim.new(0, 18)
@@ -179,9 +208,7 @@ function lib:init(ti, dosplash, visiblekey, deleteprevious)
     workareacornerhider.BorderSizePixel = 0
     workareacornerhider.Size = UDim2.new(0, 18, 0.99895674, 0)
 
-
     -- searchbar
-
     local search = Instance.new("Frame")
     search.Name = "search"
     search.Parent = main
@@ -225,15 +252,15 @@ function lib:init(ti, dosplash, visiblekey, deleteprevious)
         searchtextbox:CaptureFocus()
     end)
 
-    -- sidebar
-
+    -- ============================================================
+    -- sidebar — fully transparent; the leftPanel provides the frost
+    -- ============================================================
     local sidebar = Instance.new("ScrollingFrame")
     sidebar.Name = "sidebar"
     sidebar.Parent = main
     sidebar.Active = true
     sidebar.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    -- CHANGED: 1 -> 0.5 so the sidebar has a semi-transparent frosted background
-    sidebar.BackgroundTransparency = 0.5
+    sidebar.BackgroundTransparency = 1        -- was 0.5; now invisible
     sidebar.BorderSizePixel = 0
     sidebar.Position = UDim2.new(0.0249653254, 0, 0.181506842, 0)
     sidebar.Size = UDim2.new(0, 233, 0, 463)
@@ -241,18 +268,13 @@ function lib:init(ti, dosplash, visiblekey, deleteprevious)
     sidebar.CanvasSize = UDim2.new(0, 0, 0, 0)
     sidebar.ScrollBarThickness = 2
 
-    -- ADDED: Rounded corners on the sidebar background
-    local sidebarCorner = Instance.new("UICorner")
-    sidebarCorner.CornerRadius = UDim.new(0, 12)
-    sidebarCorner.Parent = sidebar
-
     local ull_2 = Instance.new("UIListLayout")
     ull_2.Parent = sidebar
     ull_2.SortOrder = Enum.SortOrder.LayoutOrder
     ull_2.Padding = UDim.new(0, 5)
 
-    game:GetService("RunService"):BindToRenderStep("search", 1, function() -- i sure do love skidding
-        if not searchtextbox:IsFocused() then 
+    game:GetService("RunService"):BindToRenderStep("search", 1, function()
+        if not searchtextbox:IsFocused() then
             for b,v in next, sidebar:GetChildren() do
                 if not v:IsA("TextButton") then return end
                 v.Visible = true
@@ -269,9 +291,8 @@ function lib:init(ti, dosplash, visiblekey, deleteprevious)
             end
         end
     end)
+
     -- macos style buttons
-
-
     local buttons = Instance.new("Frame")
     buttons.Name = "buttons"
     buttons.Parent = main
@@ -287,7 +308,6 @@ function lib:init(ti, dosplash, visiblekey, deleteprevious)
     ull_3.VerticalAlignment = Enum.VerticalAlignment.Center
     ull_3.Padding = UDim.new(0, 10)
 
-
     local close = Instance.new("TextButton")
     close.Name = "close"
     close.Parent = buttons
@@ -302,11 +322,9 @@ function lib:init(ti, dosplash, visiblekey, deleteprevious)
         scrgui:Destroy()
     end)
 
-
     local uc_18 = Instance.new("UICorner")
     uc_18.CornerRadius = UDim.new(1, 0)
     uc_18.Parent = close
-
 
     local minimize = Instance.new("TextButton")
     minimize.Name = "minimize"
@@ -319,11 +337,9 @@ function lib:init(ti, dosplash, visiblekey, deleteprevious)
     minimize.TextColor3 = Color3.fromRGB(255, 50, 50)
     minimize.TextSize = 14
 
-
     local uc_19 = Instance.new("UICorner")
     uc_19.CornerRadius = UDim.new(1, 0)
     uc_19.Parent = minimize
-
 
     local resize = Instance.new("TextButton")
     resize.Name = "resize"
@@ -341,8 +357,6 @@ function lib:init(ti, dosplash, visiblekey, deleteprevious)
     uc_20.Parent = resize
 
     -- title text at topbar
-
-
     local title = Instance.new("TextLabel")
     title.Name = "title"
     title.Parent = main
@@ -452,7 +466,6 @@ function lib:init(ti, dosplash, visiblekey, deleteprevious)
     notiftext.TextWrapped = true
 
     -- notifcation 2 (two button)
-
     local notif2 = Instance.new("Frame")
     notif2.Name = "notif2"
     notif2.Parent = main
@@ -491,7 +504,6 @@ function lib:init(ti, dosplash, visiblekey, deleteprevious)
     notif2title.TextColor3 = Color3.fromRGB(95, 95, 95)
     notif2title.TextSize = 28
 
-
     local notif2text = Instance.new("TextLabel")
     notif2text.Name = "notif2text"
     notif2text.Parent = notif2
@@ -505,7 +517,6 @@ function lib:init(ti, dosplash, visiblekey, deleteprevious)
     notif2text.TextColor3 = Color3.fromRGB(95, 95, 95)
     notif2text.TextSize = 16
     notif2text.TextWrapped = true
-
 
     local notif2button1 = Instance.new("TextButton")
     notif2button1.Name = "notif2button1"
@@ -523,7 +534,6 @@ function lib:init(ti, dosplash, visiblekey, deleteprevious)
     uc_15.CornerRadius = UDim.new(0, 9)
     uc_15.Parent = notif2button1
 
-
     local notif2shadow = Instance.new("ImageLabel")
     notif2shadow.Name = "notif2shadow"
     notif2shadow.Parent = notif2
@@ -533,7 +543,6 @@ function lib:init(ti, dosplash, visiblekey, deleteprevious)
     notif2shadow.Size = UDim2.new(1.20000005, 0, 1.20000005, 0)
     notif2shadow.Image = "rbxassetid://313486536"
     notif2shadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
-
 
     local notif2darkness = Instance.new("Frame")
     notif2darkness.Name = "notif2darkness"
@@ -545,11 +554,9 @@ function lib:init(ti, dosplash, visiblekey, deleteprevious)
     notif2darkness.Size = UDim2.new(0, 721, 0, 584)
     notif2darkness.ZIndex = 2
 
-
     local uc_16 = Instance.new("UICorner")
     uc_16.CornerRadius = UDim.new(0, 18)
     uc_16.Parent = notif2darkness
-
 
     local notif2button2 = Instance.new("TextButton")
     notif2button2.Name = "notif2button2"
@@ -564,7 +571,6 @@ function lib:init(ti, dosplash, visiblekey, deleteprevious)
     notif2button2.TextColor3 = Color3.fromRGB(95, 95, 95)
     notif2button2.TextSize = 21
 
-
     local uc_17 = Instance.new("UICorner")
     uc_17.CornerRadius = UDim.new(0, 9)
     uc_17.Parent = notif2button2
@@ -574,7 +580,7 @@ function lib:init(ti, dosplash, visiblekey, deleteprevious)
     else
         title.Text = ""
     end
-       tp(main, UDim2.new(0.5, 0, 0.5, 0), 1)
+    tp(main, UDim2.new(0.5, 0, 0.5, 0), 1)
     window = {}
 
     function window:ToggleVisible()
@@ -612,7 +618,7 @@ function lib:init(ti, dosplash, visiblekey, deleteprevious)
 
     function window:TempNotify(text1, text2, icon)
         for b,v in next, scrgui:GetChildren() do
-            if v.Name == "tempnotif" then 
+            if v.Name == "tempnotif" then
                 v.Position += UDim2.new(0,0,0,130)
             end
         end
@@ -647,7 +653,6 @@ function lib:init(ti, dosplash, visiblekey, deleteprevious)
         t2.TextXAlignment = Enum.TextXAlignment.Left
         t2.TextYAlignment = Enum.TextYAlignment.Top
 
-
         local t1 = Instance.new("TextLabel")
         t1.Name = "t1"
         t1.Parent = tempnotif
@@ -662,7 +667,6 @@ function lib:init(ti, dosplash, visiblekey, deleteprevious)
         t1.TextSize = 28
         t1.TextXAlignment = Enum.TextXAlignment.Left
 
-
         local ticon = Instance.new("ImageLabel")
         ticon.Name = "ticon"
         ticon.Parent = tempnotif
@@ -674,7 +678,6 @@ function lib:init(ti, dosplash, visiblekey, deleteprevious)
         ticon.Image = icon
         ticon.ImageColor3 = Color3.fromRGB(95, 95, 95)
         ticon.ScaleType = Enum.ScaleType.Fit
-
 
         local tshadow = Instance.new("ImageLabel")
         tshadow.Name = "tshadow"
@@ -762,7 +765,7 @@ function lib:init(ti, dosplash, visiblekey, deleteprevious)
         sidebar2.Text = name
         sidebar2.TextColor3 = Color3.fromRGB(0, 0, 0)
         sidebar2.TextSize = 21
-        
+
         local uc_10 = Instance.new("UICorner")
         uc_10.CornerRadius = UDim.new(0, 9)
         uc_10.Parent = sidebar2
@@ -787,7 +790,7 @@ function lib:init(ti, dosplash, visiblekey, deleteprevious)
         ull.HorizontalAlignment = Enum.HorizontalAlignment.Center
         ull.SortOrder = Enum.SortOrder.LayoutOrder
         ull.Padding = UDim.new(0, 5)
-    
+
         table.insert(workareas, workareamain)
 
         local sec = {}
@@ -842,9 +845,8 @@ function lib:init(ti, dosplash, visiblekey, deleteprevious)
             us.Color = Color3.fromRGB(21, 103, 251)
             us.Thickness = 1
 
-
             if callback then
-                button.MouseButton1Click:Connect(function() 
+                button.MouseButton1Click:Connect(function()
                     coroutine.wrap(function()
                         button.TextSize -= 3
                         task.wait(0.06)
@@ -918,11 +920,7 @@ function lib:init(ti, dosplash, visiblekey, deleteprevious)
 
             Frame.MouseButton1Click:Connect(function()
                 mode = not mode
-
-                if callback then
-                    callback(mode)
-                end
-
+                if callback then callback(mode) end
                 if mode then
                     TextButton:TweenPosition(UDim2.new(0, 35, 0, 1), "In", "Sine", 0.1, true)
                     Frame.BackgroundColor3 = Color3.fromRGB(21, 103, 251)
@@ -933,11 +931,7 @@ function lib:init(ti, dosplash, visiblekey, deleteprevious)
             end)
             TextButton.MouseButton1Click:Connect(function()
                 mode = not mode
-
-                if callback then
-                    callback(mode)
-                end
-
+                if callback then callback(mode) end
                 if mode then
                     TextButton:TweenPosition(UDim2.new(0, 35, 0, 1), "In", "Sine", 0.1, true)
                     Frame.BackgroundColor3 = Color3.fromRGB(21, 103, 251)
